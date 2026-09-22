@@ -16,6 +16,8 @@ The extension runs locally. It does not require an account password, API token, 
 
 Use **Export entire inbox** to capture all conversations available through the web interface. The exporter scrolls the inbox and each conversation to load older history. **Stop and keep progress** retains the current capture so you can download a partial archive.
 
+Loading failures and incomplete conversations are retried automatically in two additional passes. Retries cover older history, voicemail links, and media downloads, reusing saved files. If anything still needs another attempt, **Retry incomplete** revisits only those conversations in the current capture. Keep the TextFree tab open; this does not resume an older ZIP or survive a page refresh. Permission, unsupported-format/host, and size-limit failures remain noted without repeated download attempts.
+
 Opening conversations may mark them as read. Capturing voicemail audio uses the site’s Play controls and may mark recordings as listened to. The exporter does not send messages, delete conversations, or change account settings.
 
 ### Updating
@@ -56,6 +58,7 @@ Downloads use HTTPS GET requests without credentials or redirects. WAV recording
 
 ## Recent changes
 
+- **0.3.4:** automatic retries, Retry incomplete, retained media after history stalls, and a larger toolbar icon.
 - **0.3.3:** preserve clickable web links in messages and transcripts, including plain-text URLs.
 - **0.3.2:** exclude missed calls from activity counts while preserving them in the history.
 - **0.3.1:** activity counts in the sidebar with clear message, call, and voicemail breakdowns.

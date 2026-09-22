@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TextFree Local Exporter",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Save the conversations visible in TextFree Web to a local archive with a coverage report.",
   "permissions": [
     "activeTab",
