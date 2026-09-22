@@ -49,3 +49,43 @@ test('activity counts exclude missed calls without losing history or counting tr
   assert.match(missedDocument.querySelector('.thread-meta').textContent,/Missed calls only/);
   assert.equal(missedDocument.querySelectorAll('.call-event').length,2);
 });
+
+test('captured web links preserve labels, exact destinations, and message text',()=>{
+  const url='https://shop.example.test/printers/model_3?color=black&bundle=1#details';
+  const text='See this printer & its specs.\n'+url;
+  const a=archive([item('message',1,{text,links:[{text:'this printer',url},{text:url,url}]})]);
+  const {document}=parseHTML(C.render(a)),body=document.querySelector('.message-text');
+  assert.equal(body.textContent,text);
+  const anchors=[...body.querySelectorAll('a')];assert.equal(anchors.length,2);
+  assert.deepEqual(anchors.map(a=>a.textContent),['this printer',url]);
+  for(const a of anchors){assert.equal(a.getAttribute('href'),url);assert.equal(a.getAttribute('target'),'_blank');assert.equal(a.getAttribute('rel'),'noopener noreferrer');}
+  assert.equal(document.querySelector('.message-links'),null);
+});
+
+test('plain URLs become links without swallowing punctuation or changing multiline text',()=>{
+  const text='Try (https://example.test/wiki/Printer_(laser)).\nAlso https://example.test/?a=1&b=2, or www.example.test/help!';
+  const {document}=parseHTML(C.render(archive([item('message',1,{text}),item('voicemail',2,{transcript:'Visit https://example.test/support.'})])));
+  const body=document.querySelector('.message-text');assert.equal(body.textContent,text);
+  assert.deepEqual([...body.querySelectorAll('a')].map(a=>a.getAttribute('href')),['https://example.test/wiki/Printer_(laser)','https://example.test/?a=1&b=2','https://www.example.test/help']);
+  assert.equal(document.querySelector('.transcript a').getAttribute('href'),'https://example.test/support');
+});
+
+test('ambiguous labels retain every captured destination and repeated shortened URLs use the original href',()=>{
+  const label='https://example.test/short',target='https://example.test/full/path?all=1&sort=2';
+  const text=`Manual, Manual. ${label} then ${label}`;
+  const links=[{text:'Manual',url:'https://example.test/one'},{text:'Manual',url:'https://example.test/two'},{text:label,url:target},{text:label,url:target}];
+  const {document}=parseHTML(C.render(archive([item('message',1,{text,links})])));
+  assert.equal(document.querySelector('.message-text').textContent,text);
+  assert.deepEqual([...document.querySelectorAll('.message-text a')].map(a=>a.getAttribute('href')),[target,target]);
+  assert.deepEqual([...document.querySelectorAll('.message-links a')].map(a=>a.getAttribute('href')),['https://example.test/one','https://example.test/two']);
+});
+
+test('message link rendering escapes HTML and leaves non-web destinations inert',()=>{
+  const text='<img src=x onerror=alert(1)> script data file control https://example.test/masked';
+  const links=[{text:'script',url:'javascript:alert(1)'},{text:'data',url:'data:text/html,<script>alert(1)</script>'},{text:'file',url:'file:///private/test'},{text:'control',url:'https://example.test/\npath'},{text:'https://example.test/masked',url:'javascript:alert(2)'},{text:'<img src=x onerror=alert(1)>',url:'https://example.test/?q=%22&mode=1'}];
+  const {document}=parseHTML(C.render(archive([item('message',1,{text,links})])));
+  const body=document.querySelector('.message-text');assert.equal(body.textContent,text);
+  assert.equal(body.querySelectorAll('a').length,1);assert.equal(body.querySelector('img,script'),null);
+  assert.equal(body.querySelector('a').getAttribute('href'),'https://example.test/?q=%22&mode=1');
+  assert.equal(document.querySelector('.message-links'),null);
+});

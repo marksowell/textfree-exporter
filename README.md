@@ -31,6 +31,8 @@ Save any finished capture before refreshing TextFree. Replace the extension file
 
 The conversation sidebar shows the total activity count so you can spot busy threads. Conversation headings break that count into messages, calls, and voicemails. A voicemail’s transcript and recording count together as one entry. Missed calls remain visible in the history but are excluded from activity counts. The JSON report retains a separate count of all captured records.
 
+Web links in messages and transcripts are clickable and open in a new tab. Captured link destinations are preserved; plain-text HTTP, HTTPS, and `www.` addresses are linked automatically. Linked websites are not downloaded into the archive.
+
 The reader keeps routine export details in a collapsible section. Missing files and incomplete history produce specific notes in the relevant conversation. A successful capture does not show a generic warning banner.
 
 ## Coverage and limits
@@ -54,6 +56,7 @@ Downloads use HTTPS GET requests without credentials or redirects. WAV recording
 
 ## Recent changes
 
+- **0.3.3:** preserve clickable web links in messages and transcripts, including plain-text URLs.
 - **0.3.2:** exclude missed calls from activity counts while preserving them in the history.
 - **0.3.1:** activity counts in the sidebar with clear message, call, and voicemail breakdowns.
 - **0.3.0:** redesigned offline reader, compact call entries, clearer audio controls, responsive conversation navigation, and neutral export copy.
