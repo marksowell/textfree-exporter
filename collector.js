@@ -87,12 +87,30 @@
         let result;try{result=await chrome.runtime.sendMessage({type:'TF_EXPORT_MEDIA',url:item.url});}catch(e){result={ok:false,error:e.message};}
         if(!result?.ok){Object.assign(item,{status:'failed',error:result?.error||'No response from attachment downloader'});continue;}
         if(state.bytes+result.size>200*1024*1024){Object.assign(item,{status:'failed',error:'Attachment would exceed the 200 MB archive limit'});continue;}
-        const suffix={'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp','image/avif':'avif','image/bmp':'bmp','video/mp4':'mp4','audio/mpeg':'mp3','audio/mp4':'m4a','audio/wav':'wav','application/pdf':'pdf'}[result.type]||'bin';
+        const suffix={'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp','image/avif':'avif','image/bmp':'bmp','video/mp4':'mp4','audio/mpeg':'mp3','audio/mp4':'m4a','audio/wav':'wav','audio/x-wav':'wav','audio/wave':'wav','application/pdf':'pdf'}[result.type]||'bin';
         const path=`attachments/${String(state.files.length+1).padStart(6,'0')}.${suffix}`;
         const bytes=Uint8Array.from(atob(result.base64),c=>c.charCodeAt(0));
         state.files.push({name:path,data:bytes});state.bytes+=bytes.length;
         const saved={status:'saved',path,mime:result.type,size:bytes.length};Object.assign(item,saved);state.mediaCache.set(item.url,saved);
       }
+    }
+  }
+  async function voicemails(conversation){
+    const records=conversation.records.filter(r=>r.kind==='voicemail');
+    for(let ordinal=0;ordinal<records.length;ordinal++){
+      check();
+      const record=records[ordinal];
+      if(record.attachments.some(a=>a.kind==='audio'))continue;
+      record.warnings=record.warnings.filter(w=>w!==C.VOICEMAIL_WARNING);
+      if(!state.archive.mediaRequested){record.warnings.push('Voicemail audio not saved: media download was disabled or permission was declined.');continue;}
+      if(location.href!==conversation.url)throw new Error('Conversation changed before voicemail capture');
+      status(`Finding voicemail ${ordinal+1} of ${records.length} for ${conversation.contact||conversation.id}…`);
+      let result;
+      try{
+        result=await chrome.runtime.sendMessage({type:'TF_EXPORT_VOICEMAIL',pageUrl:conversation.url,ordinal,expected:{duration:record.duration,time:record.time,transcript:record.transcript}});
+      }catch(e){result={ok:false,error:e.message};}
+      if(!result?.ok){record.warnings.push(`Voicemail audio not saved: ${result?.error||'No recording link returned'}`);continue;}
+      record.attachments.push({url:result.url,kind:'audio',alt:'Voicemail recording',status:'pending'});
     }
   }
   function capture(){return C.extract(document,location.href);}
@@ -108,6 +126,7 @@
       finally{
         if(location.pathname===route){const newer=capture();Object.assign(conversation,{records:newer.records,contact:newer.contact,preview:newer.preview});}
       }
+      await voicemails(conversation);
       await media(conversation);
     }catch(e){
       if(!conversation){conversation={id:`unopened-${state.archive.conversations.length+1}`,contact:label,records:[]};state.archive.conversations.push(conversation);}
@@ -140,7 +159,7 @@
     finally{
       state.archive.finishedAt=new Date().toISOString();state.running=false;state.save.disabled=false;
       const result=C.report(state.archive);
-      status(`${state.stop?'Stopped.':'Capture finished.'} ${result.conversationCount} conversations, ${result.recordCount} records.\n${result.downloadedAttachments} attachments saved; ${result.unsavedAttachments} not saved.\n${result.missingVoicemailAudio} voicemail recordings missing.\n${result.conversationsNeedingReview.length} conversations need review.\nClick Download ZIP to save the archive.${result.errors.length?'\n'+result.errors.join('\n'):''}`);
+      status(`${state.stop?'Stopped.':'Capture finished.'} ${result.conversationCount} conversations, ${result.recordCount} records.\n${result.savedVoicemailAudio} of ${result.voicemailCount} voicemail recordings saved; ${result.missingVoicemailAudio} missing.\n${result.downloadedAttachments} media files saved in total; ${result.unsavedAttachments} discovered files not saved.\n${result.conversationsNeedingReview.length} conversations need review.\nClick Download ZIP to save the archive.${result.errors.length?'\n'+result.errors.join('\n'):''}`);
       // Restore only the original selected row, never use browser history or forms.
       if(original?.isConnected&&!original.classList.contains('conversation-selected'))original.querySelector('.contact')?.click();
     }

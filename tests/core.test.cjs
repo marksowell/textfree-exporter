@@ -33,10 +33,10 @@ test('ZIP is valid, includes binary payload, and rejects unsafe filenames',async
   const result=child.spawnSync('python3',['-c','import io,sys,zipfile;z=zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()));assert z.testzip() is None;assert z.read("index.html").decode()=="Hello π";assert z.read("attachments/000001.bin")==bytes([0,255,7])'],{input:Buffer.from(await zip.arrayBuffer()),encoding:'utf8'});
   assert.equal(result.status,0,result.stderr);assert.throws(()=>C.zip([{name:'../escape',data:'bad'}]),/Unsafe/);
 });
-function simulation(mode='all'){
+function simulation(mode='all',options={}){
   const {document,window}=parseHTML('<html><body><ion-content class="conversation-list-content"><ion-list class="conversation-list"><ion-item class="conversation conversation-selected"><p class="contact">A</p></ion-item></ion-list><ion-infinite-scroll class="hydrated infinite-scroll-enabled"></ion-infinite-scroll></ion-content><communications-detail-page><ion-content class="conversation-container"><ion-infinite-scroll class="hydrated infinite-scroll-enabled"></ion-infinite-scroll><div class="messages-container"><span class="communication-date">September 21, 2026</span>'+message+'</div></ion-content></communications-detail-page></body></html>');
   let clock=0,listener;const location={origin:'https://messages.textfree.us',pathname:'/conversation/1',get href(){return this.origin+this.pathname;}};
-  const ctx={TFCore:C,document,location,console,URL,Blob,TextEncoder,Uint8Array,Event:window.Event,atob,btoa,Date:class extends Date{static now(){return clock;}},setTimeout:(f,ms)=>{clock+=ms;setImmediate(f);return 1;},chrome:{runtime:{onMessage:{addListener(f){listener=f;}},sendMessage:async()=>({ok:false,error:'simulated inaccessible attachment'})}}};
+  const ctx={TFCore:C,document,location,console,URL,Blob,TextEncoder,Uint8Array,Event:window.Event,atob,btoa,Date:class extends Date{static now(){return clock;}},setTimeout:(f,ms)=>{clock+=ms;setImmediate(f);return 1;},chrome:{runtime:{onMessage:{addListener(f){listener=f;}},sendMessage:options.sendMessage|| (async()=>({ok:false,error:'simulated inaccessible attachment'}))}}};
   for(const el of document.querySelectorAll('ion-content')){const s=el.attachShadow({mode:'open'});s.innerHTML='<div class="inner-scroll"></div>';}
   const list=document.querySelector('.conversation-list-content'),history=document.querySelector('.conversation-container');let events=0;
   list.shadowRoot.querySelector('.inner-scroll').addEventListener('scroll',()=>{
@@ -53,7 +53,7 @@ function simulation(mode='all'){
     if(mode==='stop')ctx.TFRunner.stop=true;
   });
   vm.runInNewContext(fs.readFileSync(require.resolve('../collector.js'),'utf8'),ctx);
-  listener({type:'TF_EXPORT_START',scope:mode==='all'||mode==='navigation-fails'?'all':'current',media:false},{},()=>{});
+  listener({type:'TF_EXPORT_START',scope:mode==='all'||mode==='navigation-fails'?'all':'current',media:!!options.media},{},()=>{});
   return ctx;
 }
 async function finished(ctx){for(let i=0;i<1000&&ctx.TFRunner.running;i++)await new Promise(setImmediate);assert.equal(ctx.TFRunner.running,false);return ctx.TFRunner.archive;}
@@ -61,3 +61,21 @@ test('collector paginates inbox and history and retains repeated messages',async
 test('pagination stalls are explicitly incomplete',async()=>{const a=await finished(simulation('stall'));assert.equal(a.conversations[0].history.status,'incomplete');assert.match(a.conversations[0].history.reason,/three attempts/);});
 test('stop preserves the current capture and marks it incomplete',async()=>{const a=await finished(simulation('stop'));assert.equal(a.conversations[0].records.length,2);assert.equal(a.conversations[0].history.status,'incomplete');assert.match(a.errors[0],/Stopped/);});
 test('navigation failure cannot archive the previous chat under a new label',async()=>{const a=await finished(simulation('navigation-fails'));assert.equal(a.conversations.length,2);assert.equal(a.conversations[1].records.length,0);assert.ok(a.conversations[1].error);assert.match(a.conversations[1].id,/unopened/);});
+
+test('collector stores voicemail audio with its transcript and duration and renders local playback',async()=>{
+  const calls=[];
+  const ctx=simulation('all',{media:true,sendMessage:async message=>{calls.push(message);return message.type==='TF_EXPORT_VOICEMAIL'?{ok:true,url:'https://pinger-prod-vmmessages.s3.amazonaws.com/vmmessages/123/2026/test.wav'}:{ok:true,type:'audio/wav',size:3,base64:'AQID'};}});
+  const a=await finished(ctx),r=a.conversations[1].records[0],report=C.report(a);
+  assert.equal(calls[0].type,'TF_EXPORT_VOICEMAIL');assert.equal(calls[0].pageUrl,'https://messages.textfree.us/conversation/2');assert.equal(calls[0].ordinal,0);assert.equal(calls[0].expected.transcript,'Please call back.');
+  assert.equal(r.transcript,'Please call back.');assert.equal(r.duration,'0:35');assert.equal(r.warnings.length,0);assert.equal(r.attachments[0].status,'saved');assert.equal(r.attachments[0].path,'attachments/000001.wav');assert.equal(report.savedVoicemailAudio,1);assert.equal(report.missingVoicemailAudio,0);assert.equal(report.conversationsNeedingReview.length,0);assert.deepEqual(Array.from(ctx.TFRunner.files[0].data),[1,2,3]);
+  assert.match(C.render(a),/<audio controls preload="none" src="attachments\/000001.wav"><\/audio>/);assert.match(C.render(a),/1 of 1 voicemail recordings saved/);
+});
+test('voicemail link or download failure retains text and counts a missing recording',async()=>{
+  for(const stage of ['link','download']){
+    const a=await finished(simulation('all',{media:true,sendMessage:async message=>message.type==='TF_EXPORT_VOICEMAIL'&&stage==='download'?{ok:true,url:'https://pinger-prod-vmmessages.s3.amazonaws.com/vmmessages/123/2026/test.wav'}:{ok:false,error:'Synthetic '+stage+' failure'}}));
+    const r=a.conversations[1].records[0],report=C.report(a);assert.equal(r.transcript,'Please call back.');assert.equal(r.duration,'0:35');assert.equal(report.savedVoicemailAudio,0);assert.equal(report.missingVoicemailAudio,1);assert.equal(report.conversationsNeedingReview.length,1);assert.match(JSON.stringify(report),/Synthetic/);assert.equal(report.unsavedAttachments,stage==='download'?1:0);
+  }
+});
+test('disabled media never requests voicemail links and explains missing audio',async()=>{
+  let calls=0;const a=await finished(simulation('all',{sendMessage:async()=>{calls++;}}));assert.equal(calls,0);assert.equal(C.report(a).missingVoicemailAudio,1);assert.match(a.conversations[1].records[0].warnings[0],/disabled or permission/);
+});

@@ -3,10 +3,16 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 function downloader(options={}){
-  let listener,requests=[];
-  const ctx={URL,AbortController,Uint8Array,btoa,setTimeout,clearTimeout,chrome:{permissions:{contains:async()=>options.allowed!==false},runtime:{onMessage:{addListener(f){listener=f;}}}},fetch:async(url,config)=>{requests.push({url,config});return new Response(new Uint8Array([1,2,3]),{headers:{'content-type':options.type||'image/jpeg'}});}};
-  vm.runInNewContext(fs.readFileSync(require.resolve('../background.js'),'utf8'),ctx);
-  return {requests,run:(url,sender={tab:{id:1},url:'https://messages.textfree.us/conversation/1'})=>new Promise(resolve=>listener({type:'TF_EXPORT_MEDIA',url},sender,resolve))};
+  let listener,requests=[],permissions=[],injections=[];
+  const ctx=vm.createContext({URL,AbortController,Uint8Array,btoa,setTimeout,clearTimeout,
+    importScripts(file){vm.runInContext(fs.readFileSync(require.resolve('../'+file),'utf8'),ctx);},
+    chrome:{permissions:{contains:async request=>{permissions.push(request);return options.allowed!==false;}},
+      scripting:{executeScript:async config=>{injections.push(config);if(options.scriptError)throw new Error(options.scriptError);return [{frameId:0,result:options.link}];}},
+      runtime:{onMessage:{addListener(f){listener=f;}}}},
+    fetch:async(url,config)=>{requests.push({url,config});return new Response(options.bytes||new Uint8Array([1,2,3]),{headers:{'content-type':options.type||'image/jpeg'}});}});
+  vm.runInContext(fs.readFileSync(require.resolve('../background.js'),'utf8'),ctx);
+  const send=(message,sender={tab:{id:1},frameId:0,url:'https://messages.textfree.us/conversation/1'})=>new Promise(resolve=>listener(message,sender,resolve));
+  return {requests,permissions,injections,send,run:(url,sender)=>send({type:'TF_EXPORT_MEDIA',url},sender)};
 }
 test('media downloader accepts only the observed TextFree attachment host and path',async()=>{
   const d=downloader();
@@ -18,4 +24,30 @@ test('media GET omits credentials, rejects redirects, and returns local bytes',a
 });
 test('media downloader refuses missing permission and active document formats',async()=>{
   const url='https://pingerprod01usw2-pb-mmspics.s3.amazonaws.com/communications/1/a.jpg';const denied=downloader({allowed:false});assert.equal((await denied.run(url)).ok,false);assert.equal(denied.requests.length,0);for(const type of ['text/html','image/svg+xml'])assert.equal((await downloader({type}).run(url)).ok,false);
+});
+
+const voiceUrl='https://pinger-prod-vmmessages.s3.amazonaws.com/vmmessages/123/2026/synthetic.wav';
+const wav=Buffer.from('RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00','binary');
+const voiceRequest={type:'TF_EXPORT_VOICEMAIL',pageUrl:'https://messages.textfree.us/conversation/1',ordinal:0,expected:{duration:'0:12',time:'9:00 AM',transcript:'Test'}};
+test('voicemail WAV downloads accept common content types and require the matching host permission',async()=>{
+  for(const type of ['audio/wav','audio/x-wav','application/octet-stream']){
+    const d=downloader({type,bytes:wav});const result=await d.run(voiceUrl);assert.equal(result.ok,true);assert.equal(result.type,'audio/wav');assert.deepEqual(Buffer.from(result.base64,'base64'),wav);assert.equal(d.permissions[0].origins[0],'https://pinger-prod-vmmessages.s3.amazonaws.com/*');
+  }
+  assert.equal((await downloader({type:'audio/wav'}).run(voiceUrl)).ok,false);
+});
+test('voicemail requests reject unexpected hosts, ports, paths, credentials, and senders',async()=>{
+  const d=downloader({type:'audio/wav',bytes:wav});
+  for(const url of ['https://pinger-prod-vmmessages.s3.amazonaws.com/other/test.wav','https://pinger-prod-vmmessages.s3.amazonaws.com.evil.example/vmmessages/a.wav','https://pinger-prod-vmmessages.s3.amazonaws.com:8443/vmmessages/a.wav','https://user:pass@pinger-prod-vmmessages.s3.amazonaws.com/vmmessages/a.wav'])assert.equal((await d.run(url)).ok,false);
+  assert.equal((await d.run(voiceUrl,{tab:{id:1},url:'https://evil.example/'})).ok,false);assert.equal(d.requests.length,0);
+});
+test('voicemail capture invokes only the sender top frame in MAIN and validates the returned link',async()=>{
+  const d=downloader({link:voiceUrl});const result=await d.send(voiceRequest);assert.equal(result.ok,true);assert.equal(result.url,voiceUrl);assert.equal(d.injections[0].world,'MAIN');assert.equal(d.injections[0].target.tabId,1);assert.equal(d.injections[0].target.frameIds.length,1);assert.equal(d.injections[0].target.frameIds[0],0);assert.equal(d.injections[0].args[0].expected.transcript,'Test');assert.equal(typeof d.injections[0].func,'function');assert.equal(d.requests.length,0);
+  assert.equal((await downloader({link:'https://example.org/test.wav'}).send(voiceRequest)).ok,false);
+  assert.equal((await downloader({scriptError:'No link'}).send(voiceRequest)).ok,false);
+});
+test('invalid or unpermitted voicemail requests never click the page',async()=>{
+  const d=downloader({link:voiceUrl});
+  for(const message of [{...voiceRequest,pageUrl:voiceRequest.pageUrl+'2'},{...voiceRequest,ordinal:-1},{...voiceRequest,expected:{}}])assert.equal((await d.send(message)).ok,false);
+  assert.equal((await d.send(voiceRequest,{tab:{id:1},frameId:1,url:voiceRequest.pageUrl})).ok,false);assert.equal(d.injections.length,0);
+  const denied=downloader({allowed:false});assert.equal((await denied.send(voiceRequest)).ok,false);assert.equal(denied.injections.length,0);
 });
