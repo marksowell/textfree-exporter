@@ -79,3 +79,10 @@ test('voicemail link or download failure retains text and counts a missing recor
 test('disabled media never requests voicemail links and explains missing audio',async()=>{
   let calls=0;const a=await finished(simulation('all',{sendMessage:async()=>{calls++;}}));assert.equal(calls,0);assert.equal(C.report(a).missingVoicemailAudio,1);assert.match(a.conversations[1].records[0].warnings[0],/disabled or permission/);
 });
+
+test('completion panel displays voicemail failure reasons without opening the JSON report',async()=>{
+  const ctx=simulation('all',{media:true,sendMessage:async()=>({ok:false,error:'Invalid voicemail request'})});
+  const a=await finished(ctx),report=C.report(a);
+  assert.deepEqual(report.voicemailFailureReasons,[{reason:'Voicemail audio not saved: Invalid voicemail request',count:1}]);
+  assert.match(ctx.TFRunner.status.textContent,/1 recording\(s\): Voicemail audio not saved: Invalid voicemail request/);
+});

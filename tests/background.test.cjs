@@ -7,7 +7,7 @@ function downloader(options={}){
   const ctx=vm.createContext({URL,AbortController,Uint8Array,btoa,setTimeout,clearTimeout,
     importScripts(file){vm.runInContext(fs.readFileSync(require.resolve('../'+file),'utf8'),ctx);},
     chrome:{permissions:{contains:async request=>{permissions.push(request);return options.allowed!==false;}},
-      scripting:{executeScript:async config=>{injections.push(config);if(options.scriptError)throw new Error(options.scriptError);return [{frameId:0,result:options.link}];}},
+      scripting:{executeScript:async config=>{injections.push(config);if(options.scriptError)throw new Error(options.scriptError);return options.execute?options.execute(config):[{frameId:0,result:options.captureResult||{ok:true,url:options.link}}];}},
       runtime:{onMessage:{addListener(f){listener=f;}}}},
     fetch:async(url,config)=>{requests.push({url,config});return new Response(options.bytes||new Uint8Array([1,2,3]),{headers:{'content-type':options.type||'image/jpeg'}});}});
   vm.runInContext(fs.readFileSync(require.resolve('../background.js'),'utf8'),ctx);
@@ -47,7 +47,30 @@ test('voicemail capture invokes only the sender top frame in MAIN and validates 
 });
 test('invalid or unpermitted voicemail requests never click the page',async()=>{
   const d=downloader({link:voiceUrl});
-  for(const message of [{...voiceRequest,pageUrl:voiceRequest.pageUrl+'2'},{...voiceRequest,ordinal:-1},{...voiceRequest,expected:{}}])assert.equal((await d.send(message)).ok,false);
+  for(const message of [{...voiceRequest,pageUrl:'https://example.org/conversation/2'},{...voiceRequest,ordinal:-1},{...voiceRequest,expected:{}}])assert.equal((await d.send(message)).ok,false);
   assert.equal((await d.send(voiceRequest,{tab:{id:1},frameId:1,url:voiceRequest.pageUrl})).ok,false);assert.equal(d.injections.length,0);
   const denied=downloader({allowed:false});assert.equal((await denied.send(voiceRequest)).ok,false);assert.equal(denied.injections.length,0);
+});
+
+test('same-origin SPA navigation accepts a stale Chrome sender URL and preserves capture errors',async()=>{
+  const d=downloader({link:voiceUrl});
+  const result=await d.send({...voiceRequest,pageUrl:'https://messages.textfree.us/conversation/2'});
+  assert.equal(result.ok,true);assert.equal(d.injections[0].args[0].pageUrl,'https://messages.textfree.us/conversation/2');
+  const failure=await downloader({captureResult:{ok:false,error:'Voicemail Play button is unavailable'}}).send(voiceRequest);
+  assert.equal(failure.ok,false);assert.equal(failure.error,'Voicemail Play button is unavailable');
+});
+test('real serialized capture works after SPA navigation but refuses a wrong current page',async()=>{
+  const {parseHTML}=require('linkedom');
+  const pageUrl='https://messages.textfree.us/conversation/2';
+  const {document}=parseHTML('<html><body><communications-detail-page><div class="messages-container"><sc-voice-mail-message><button data-testid="voicemail-msg-bubble"><span class="voicemail-time">0:12</span></button><span class="message-time">9:00 AM</span><div class="voicemail-transcription-text">Test</div></sc-voice-mail-message></div></communications-detail-page></body></html>');
+  let clicks=0;
+  const originalOpen=()=>assert.fail('No popup should open during capture');
+  const window={open:originalOpen};
+  const page=vm.createContext({document,window,location:{origin:'https://messages.textfree.us',href:pageUrl}});
+  document.querySelector('button').addEventListener('click',()=>{clicks++;window.open(voiceUrl);});
+  const d=downloader({execute:config=>[{frameId:0,result:vm.runInContext('('+config.func.toString()+')('+JSON.stringify(config.args[0])+')',page)}]});
+  const success=await d.send({...voiceRequest,pageUrl});
+  assert.equal(success.ok,true);assert.equal(success.url,voiceUrl);assert.equal(clicks,1);assert.equal(window.open,originalOpen);
+  const failure=await d.send(voiceRequest);
+  assert.equal(failure.ok,false);assert.match(failure.error,/Conversation changed/);assert.equal(clicks,1);
 });

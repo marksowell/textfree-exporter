@@ -159,7 +159,8 @@
     finally{
       state.archive.finishedAt=new Date().toISOString();state.running=false;state.save.disabled=false;
       const result=C.report(state.archive);
-      status(`${state.stop?'Stopped.':'Capture finished.'} ${result.conversationCount} conversations, ${result.recordCount} records.\n${result.savedVoicemailAudio} of ${result.voicemailCount} voicemail recordings saved; ${result.missingVoicemailAudio} missing.\n${result.downloadedAttachments} media files saved in total; ${result.unsavedAttachments} discovered files not saved.\n${result.conversationsNeedingReview.length} conversations need review.\nClick Download ZIP to save the archive.${result.errors.length?'\n'+result.errors.join('\n'):''}`);
+      const failures=result.voicemailFailureReasons.slice(0,3).map(f=>`${f.count} recording(s): ${f.reason}`).join('\n');
+      status(`${state.stop?'Stopped.':'Capture finished.'} ${result.conversationCount} conversations, ${result.recordCount} records.\n${result.savedVoicemailAudio} of ${result.voicemailCount} voicemail recordings saved; ${result.missingVoicemailAudio} missing.${failures?'\n'+failures:''}\n${result.downloadedAttachments} media files saved in total; ${result.unsavedAttachments} discovered files not saved.\n${result.conversationsNeedingReview.length} conversations need review.\nClick Download ZIP to save the archive.${result.errors.length?'\n'+result.errors.join('\n'):''}`);
       // Restore only the original selected row, never use browser history or forms.
       if(original?.isConnected&&!original.classList.contains('conversation-selected'))original.querySelector('.contact')?.click();
     }

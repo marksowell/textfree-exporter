@@ -15,7 +15,12 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
   (async()=>{
     if(!sender.tab || (sender.frameId ?? 0) !== 0 || new URL(sender.url).origin !== 'https://messages.textfree.us') throw new Error('Unexpected sender');
     if(message.type === 'TF_EXPORT_VOICEMAIL') {
-      if(message.pageUrl !== sender.url || !new URL(message.pageUrl).pathname.startsWith('/conversation/') ||
+      // Chrome can retain the content script's original URL in sender.url after
+      // TextFree navigates with pushState. Trust it for origin only; the injected
+      // function checks the current location and record immediately before click.
+      const requestedPage = new URL(message.pageUrl);
+      if(requestedPage.origin !== 'https://messages.textfree.us' || !requestedPage.pathname.startsWith('/conversation/') ||
+         requestedPage.username || requestedPage.password ||
          !Number.isSafeInteger(message.ordinal) || message.ordinal < 0 ||
          !['duration','time','transcript'].every(key => typeof message.expected?.[key] === 'string')) throw new Error('Invalid voicemail request');
       if(!await chrome.permissions.contains({origins:['https://pinger-prod-vmmessages.s3.amazonaws.com/*']})) throw new Error('Voicemail download permission was not granted');
@@ -24,8 +29,8 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
         args:[{pageUrl:message.pageUrl,ordinal:message.ordinal,expected:message.expected}]
       });
       const result = results.find(r => r.frameId === 0);
-      if(!result || typeof result.result !== 'string') throw new Error('TextFree did not expose a voicemail recording link');
-      return {ok:true,url:mediaUrl(result.result,true).href};
+      if(!result?.result?.ok) throw new Error(result?.result?.error || 'TextFree did not return a voicemail capture result');
+      return {ok:true,url:mediaUrl(result.result.url,true).href};
     }
     const url = mediaUrl(message.url);
     const permitted=await chrome.permissions.contains({origins:[`https://${url.hostname}/*`]});

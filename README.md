@@ -2,7 +2,7 @@
 
 A small, local Chrome extension built against the TextFree Web interface inspected on September 21, 2026. No account password, API token, remote service, analytics, or production dependencies are required.
 
-**Experimental:** a user has completed a full-inbox capture with the previous version. Voicemail recording capture is new in **0.2.0** and has synthetic test coverage; try a conversation with voicemail and check its offline audio before running the full inbox.
+**Experimental:** a live full-inbox run of 0.2.0 captured text but exposed a voicemail-discovery failure. **0.2.1** fixes a URL check that can reject capture after conversation navigation and adds visible failure reasons. Try a conversation with voicemail and check its offline audio before running the full inbox.
 
 ## Install and use
 
@@ -16,6 +16,10 @@ A small, local Chrome extension built against the TextFree Web interface inspect
 8. Unzip the resulting archive and open **index.html**. Check **report.json**, then use **Export entire inbox** for the full available web history.
 
 The extension opens conversations and scrolls the inbox and each chat to load older history. This may mark conversations as read. To capture voicemail audio, it clicks the voicemail Play controls while briefly intercepting their recording links; this **may mark voicemails as listened to**. It saves the files without playing audio or opening a tab for each recording. It never types into the message composer, sends messages, deletes conversations, changes account settings, or follows links inside messages. **Stop and keep progress** preserves the current capture; click **Download ZIP** afterward. Refreshing or closing TextFree discards any capture you have not downloaded. The extension can be removed from Chrome after use.
+
+### Version 0.2.1
+
+Fixes a voicemail capture check that compared each conversation URL with Chrome's content-script sender URL. Chrome can retain the original sender URL while TextFree moves between conversations without a reload, causing `Invalid voicemail request` before any audio link is captured. The exporter now validates the sender's origin and checks the actual page URL and voicemail record inside the page immediately before clicking. Failed capture details are returned explicitly and the completion panel lists the most common voicemail failure reasons.
 
 ### Updating an existing installation
 
@@ -46,7 +50,7 @@ Download any finished capture before refreshing TextFree. Replace the extension 
 
 Live page inspection verified active vs. hidden chat selectors, message and call markup, displayed timestamps, voicemail transcripts, image URLs, the Ionic shadow-DOM scroll area, inbox pagination, and a voicemail recording opened by the site's Play control. A user-provided recording URL returned HTTP 200 with WAV content. This repository contains only source code and synthetic test fixtures; no personal conversations, recording URLs, or account exports are included.
 
-Automated tests cover parsing, duplicate preservation, hidden-page isolation, unknown records, missing audio, ZIP integrity, HTML escaping, inbox/history pagination, stalled history, cancellation, navigation failure, restricted media fetching, voicemail link capture and restoration, record mismatch guards, and voicemail download success and failure. Tests use synthetic data. The new voicemail flow has **not yet been run through the installed extension against a full live inbox**. Begin with a single-conversation export and verify offline playback.
+Automated tests cover parsing, duplicate preservation, hidden-page isolation, unknown records, missing audio, ZIP integrity, HTML escaping, inbox/history pagination, stalled history, cancellation, navigation failure, restricted media fetching, voicemail link capture and restoration, record mismatch guards, voicemail download success and failure, and stale sender URLs after conversation navigation. Tests use synthetic data. The 0.2.1 fix has **not yet been verified through the installed extension on a live inbox**. Begin with a single-conversation export and verify offline playback.
 
 For development only, with Node.js 22+ and Python 3 available:
 

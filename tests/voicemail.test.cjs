@@ -19,21 +19,21 @@ function fixture(options={}) {
   return {ctx,clicks,originalOpen,get popups(){return popups;},run:(changes={})=>ctx.captureVoicemailLink({pageUrl,ordinal:1,expected,...changes})};
 }
 test('captures the requested visible voicemail link without opening a popup and restores window.open',()=>{
-  const f=fixture();assert.equal(f.run(),recording);assert.deepEqual(f.clicks,[2]);assert.equal(f.popups,0);assert.equal(f.ctx.window.open,f.originalOpen);
+  const f=fixture();assert.equal(f.run().url,recording);assert.deepEqual(f.clicks,[2]);assert.equal(f.popups,0);assert.equal(f.ctx.window.open,f.originalOpen);
   f.ctx.window.open('https://example.org/');assert.equal(f.popups,1);
 });
 test('conversation, ordinal, and record mismatch guards prevent any voicemail click',()=>{
   for(const change of [{pageUrl:pageUrl+'2'},{ordinal:10},{expected:{...expected,duration:'0:13'}},{expected:{...expected,time:'10:00 AM'}},{expected:{...expected,transcript:'Changed'}}]){
-    const f=fixture();assert.throws(()=>f.run(change),/changed|Changed|capture/);assert.deepEqual(f.clicks,[]);assert.equal(f.ctx.window.open,f.originalOpen);
+    const f=fixture();const result=f.run(change);assert.equal(result.ok,false);assert.match(result.error,/changed|Changed|capture/);assert.deepEqual(f.clicks,[]);assert.equal(f.ctx.window.open,f.originalOpen);
   }
 });
 test('no-link and ambiguous-link failures restore normal popup behavior',()=>{
-  for(const options of [{noLink:true},{extraLink:true}]){const f=fixture(options);assert.throws(()=>f.run(),/one recording link/);assert.equal(f.ctx.window.open,f.originalOpen);assert.equal(f.popups,0);}
+  for(const options of [{noLink:true},{extraLink:true}]){const f=fixture(options);assert.match(f.run().error,/one recording link/);assert.equal(f.ctx.window.open,f.originalOpen);assert.equal(f.popups,0);}
 });
 test('a click failure restores window.open',()=>{
   const f=fixture();f.ctx.document.querySelectorAll('button')[2].click=()=>{throw new Error('Synthetic click failure');};
-  assert.throws(()=>f.run(),/Synthetic click failure/);assert.equal(f.ctx.window.open,f.originalOpen);
+  assert.match(f.run().error,/Synthetic click failure/);assert.equal(f.ctx.window.open,f.originalOpen);
 });
 test('ambiguous visible conversation pages cannot be used to capture audio',()=>{
-  const f=fixture();f.ctx.document.querySelector('.ion-page-hidden').classList.remove('ion-page-hidden');assert.throws(()=>f.run(),/active voicemail conversation/);assert.deepEqual(f.clicks,[]);
+  const f=fixture();f.ctx.document.querySelector('.ion-page-hidden').classList.remove('ion-page-hidden');assert.match(f.run().error,/active voicemail conversation/);assert.deepEqual(f.clicks,[]);
 });
