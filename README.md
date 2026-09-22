@@ -4,6 +4,8 @@ Save messages, call history, voicemail transcripts, and accessible recordings fr
 
 The extension runs locally. It does not require an account password, API token, remote service, or production dependencies, and has no analytics. It is not affiliated with TextFree or Pinger.
 
+![TextFree archive preview with a conversation sidebar, voicemail player, and transcript](docs/images/archive-preview.png)
+
 ## Install and export
 
 1. Choose **Code → Download ZIP** on GitHub, then extract the download. You can also use the packaged `textfree-exporter.zip`.
