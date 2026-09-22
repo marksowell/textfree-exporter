@@ -29,11 +29,19 @@
     const savedAt=Number.isNaN(exported.getTime())?'':new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short',timeZone:'UTC'}).format(exported)+' UTC';
     const reviewed=new Set(summary.conversationsNeedingReview.map(c=>c.id));
     const note=message=>`<p class="notice">${e(message)}</p>`;
-    const webUrl=value=>{
-      if(typeof value!=='string'||!/^https?:\/\//i.test(value)||/[\s\u0000-\u001f\u007f]/.test(value))return '';
-      try{return ['http:','https:'].includes(new URL(value).protocol)?value:'';}catch{return '';}
+    const messageUrl=value=>{
+      if(typeof value!=='string'||/[\s\u0000-\u001f\u007f]/.test(value))return '';
+      try{
+        const url=new URL(value);
+        if(/^https?:\/\//i.test(value)&&['http:','https:'].includes(url.protocol))return value;
+        if(url.protocol==='mailto:'){
+          const recipients=decodeURIComponent(url.pathname);
+          if(!recipients.startsWith('//')&&recipients.split(',').every(address=>/^[^\s<>@\u0000-\u001f\u007f]+@[^\s<>@\u0000-\u001f\u007f]+$/.test(address)))return value;
+        }
+      }catch{}
+      return '';
     };
-    const messageLink=(label,url)=>`<a class="message-link" href="${e(url)}" title="${e(url)}" target="_blank" rel="noopener noreferrer">${e(label)}</a>`;
+    const messageLink=(label,url)=>`<a class="message-link" href="${e(url)}" title="${e(url)}"${/^mailto:/i.test(url)?'':' target="_blank" rel="noopener noreferrer"'}>${e(label)}</a>`;
     const linkedText=(value,links=[],className='message-text')=>{
       const text=String(value),ranges=[],used=new Set(),shown=new Set();
       // Prefer captured destinations, including links with shortened or named labels.
@@ -41,13 +49,15 @@
       for(const link of links){
         const label=link.text||'',start=label?text.indexOf(label):-1,end=start+label.length;
         if(start<0||start!==text.lastIndexOf(label)||ranges.some(r=>start<r.end&&end>r.start))continue;
-        const url=webUrl(link.url);
+        const url=messageUrl(link.url);
         ranges.push({start,end,html:url?messageLink(label,url):e(label)});
         used.add(link);if(url)shown.add(url);
       }
       const autoLink=part=>{
         let html='',cursor=0;
-        for(const match of part.matchAll(/\b(?:https?:\/\/|www\.)[^\s<>"'`\u2018\u2019\u201c\u201d]+/gi)){
+        // Keep email matches whole, including plus tags, without consuming punctuation.
+        const tokens=/\bhttps?:\/\/[^\s<>"'`\u2018\u2019\u201c\u201d]+|(?<email>(?<![a-z0-9.!#$%&'*+/=?^_`{|}~@-])[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}(?![a-z0-9_@-]|\.[a-z0-9]))|\bwww\.[^\s<>"'`\u2018\u2019\u201c\u201d]+/gi;
+        for(const match of part.matchAll(tokens)){
           let label=match[0],previous;
           do{
             previous=label;label=label.replace(/[.,;:!?]+$/,'');
@@ -56,8 +66,9 @@
             }
           }while(label!==previous);
           const captured=links.filter(link=>link.text===label);
-          const targets=[...new Set(captured.map(link=>webUrl(link.url)))];
-          const url=captured.length?(targets.length===1?targets[0]:''):webUrl(/^www\./i.test(label)?'https://'+label:label);
+          const targets=[...new Set(captured.map(link=>messageUrl(link.url)))];
+          const inferred=match.groups.email?'mailto:'+encodeURIComponent(label).replace(/%40/gi,'@'):/^www\./i.test(label)?'https://'+label:label;
+          const url=captured.length?(targets.length===1?targets[0]:''):messageUrl(inferred);
           if(!url)continue;
           html+=e(part.slice(cursor,match.index))+messageLink(label,url);
           cursor=match.index+label.length;shown.add(url);
@@ -71,7 +82,7 @@
       html+=autoLink(text.slice(cursor));
       const extra=[];
       for(const link of links){
-        const url=webUrl(link.url);
+        const url=messageUrl(link.url);
         if(!url||used.has(link)||shown.has(url))continue;
         extra.push(messageLink(link.text||url,url));shown.add(url);
       }

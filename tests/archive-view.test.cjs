@@ -80,7 +80,7 @@ test('ambiguous labels retain every captured destination and repeated shortened 
   assert.deepEqual([...document.querySelectorAll('.message-links a')].map(a=>a.getAttribute('href')),['https://example.test/one','https://example.test/two']);
 });
 
-test('message link rendering escapes HTML and leaves non-web destinations inert',()=>{
+test('message link rendering escapes HTML and leaves unsupported destinations inert',()=>{
   const text='<img src=x onerror=alert(1)> script data file control https://example.test/masked';
   const links=[{text:'script',url:'javascript:alert(1)'},{text:'data',url:'data:text/html,<script>alert(1)</script>'},{text:'file',url:'file:///private/test'},{text:'control',url:'https://example.test/\npath'},{text:'https://example.test/masked',url:'javascript:alert(2)'},{text:'<img src=x onerror=alert(1)>',url:'https://example.test/?q=%22&mode=1'}];
   const {document}=parseHTML(C.render(archive([item('message',1,{text,links})])));
@@ -88,4 +88,45 @@ test('message link rendering escapes HTML and leaves non-web destinations inert'
   assert.equal(body.querySelectorAll('a').length,1);assert.equal(body.querySelector('img,script'),null);
   assert.equal(body.querySelector('a').getAttribute('href'),'https://example.test/?q=%22&mode=1');
   assert.equal(document.querySelector('.message-links'),null);
+});
+
+test('captured email links preserve labels, recipients, and encoded subject and body',()=>{
+  const url='mailto:help@example.test,team@example.test?subject=Printer%20help&body=First%20line%0ASecond%20line';
+  const text='Please email our support team.';
+  const {document}=parseHTML(C.render(archive([item('message',1,{text,links:[{text:'our support team',url}]})])));
+  const body=document.querySelector('.message-text'),link=body.querySelector('a');
+  assert.equal(body.textContent,text);assert.equal(link.getAttribute('href'),url);
+  assert.equal(link.textContent,'our support team');assert.equal(link.getAttribute('target'),null);
+  assert.equal(document.querySelector('.message-links'),null);
+});
+
+test('plain emails become mail links in messages and transcripts without changing text or splitting web URLs',()=>{
+  const text="Email <info@example.test>, Alex.Smith+notes@sub.example.test.\nAlso o'connor@example.test or www.contact@example.test; visit https://example.test/?email=info@example.test and www.example.test/help.";
+  const {document}=parseHTML(C.render(archive([item('message',1,{text}),item('voicemail',2,{transcript:'Reply to info@example.test!'})])));
+  const body=document.querySelector('.message-text');assert.equal(body.textContent,text);
+  assert.deepEqual([...body.querySelectorAll('a')].map(a=>a.getAttribute('href')),[
+    'mailto:info@example.test','mailto:Alex.Smith%2Bnotes@sub.example.test',"mailto:o'connor@example.test",'mailto:www.contact@example.test',
+    'https://example.test/?email=info@example.test','https://www.example.test/help'
+  ]);
+  assert.equal(document.querySelector('.transcript a').getAttribute('href'),'mailto:info@example.test');
+  assert.equal(body.querySelector('info'),null);
+});
+
+test('repeated email addresses keep captured mail destinations and do not override unsafe captured links',()=>{
+  const text='info@example.test, info@example.test; blocked@example.test.';
+  const url='mailto:info@example.test?subject=Question';
+  const links=[{text:'info@example.test',url},{text:'blocked@example.test',url:'javascript:alert(1)'}];
+  const {document}=parseHTML(C.render(archive([item('message',1,{text,links})])));
+  const body=document.querySelector('.message-text');assert.equal(body.textContent,text);
+  assert.deepEqual([...body.querySelectorAll('a')].map(a=>a.getAttribute('href')),[url,url]);
+  assert.equal(document.querySelector('.message-links'),null);
+});
+
+test('malformed email addresses and mail links with invalid recipients remain plain text',()=>{
+  const text='bad..name@example.test bad@-example.test bad@example..test bad@example.test_ empty authority control encoded';
+  const links=[{text:'empty',url:'mailto:'},{text:'authority',url:'mailto://info@example.test'},
+    {text:'control',url:'mailto:info@example.test\n'},{text:'encoded',url:'mailto:info%0A@example.test'}];
+  const {document}=parseHTML(C.render(archive([item('message',1,{text,links})])));
+  assert.equal(document.querySelector('.message-text').textContent,text);
+  assert.equal(document.querySelectorAll('.message-link').length,0);
 });

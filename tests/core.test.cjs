@@ -21,6 +21,13 @@ test('captures attachment URLs but never treats message hyperlinks as media',()=
   const c=C.extract(doc('<sc-chat-bubble><div class="text-item received-message"><a href="https://example.org/bill">Bill</a></div><span class="message-time">9:00 AM</span></sc-chat-bubble><sc-image-message><img src="https://pingerprod01usw2-pb-mmspics.s3.amazonaws.com/communications/1/test.jpg"><span class="message-time">9:01 AM</span></sc-image-message>'),'https://messages.textfree.us/conversation/1');
   assert.equal(c.records[0].links.length,1);assert.equal(c.records[0].attachments.length,0);assert.equal(c.records[1].attachments[0].kind,'image');
 });
+test('email anchors survive extraction and render as mail links without becoming attachments',()=>{
+  const c=C.extract(doc('<sc-chat-bubble><div class="text-item received-message">Email <a href="mailto:info@example.test">info@example.test</a>.</div></sc-chat-bubble>'),'https://messages.textfree.us/conversation/1');
+  assert.deepEqual(c.records[0].links,[{text:'info@example.test',url:'mailto:info@example.test'}]);
+  assert.equal(c.records[0].attachments.length,0);
+  const {document}=parseHTML(C.render(archive(c)));
+  assert.equal(document.querySelector('.message-text a').getAttribute('href'),'mailto:info@example.test');
+});
 test('unknown and unavailable components are retained and flagged',()=>{const c=C.extract(doc('<sc-new-message>Something new</sc-new-message><sc-video-message>Video unavailable</sc-video-message>'),'https://messages.textfree.us/conversation/1');assert.equal(c.records.length,2);assert.equal(c.records[0].kind,'unknown');assert.equal(c.records[1].warnings.length,1);});
 test('archive HTML escapes user content and never embeds remote media',()=>{
   const c=C.extract(doc(message),'https://messages.textfree.us/conversation/1');c.contact='<script>alert(1)</script>';c.records[0].text='<img src=x onerror=alert(1)>';c.records[0].attachments=[{url:'https://evil.example/track',kind:'image',status:'failed',error:'No access'}];
