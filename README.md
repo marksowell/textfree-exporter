@@ -1,76 +1,81 @@
 # TextFree Local Exporter
 
-A small, local Chrome extension built against the TextFree Web interface inspected on September 21, 2026. No account password, API token, remote service, analytics, or production dependencies are required.
+Save messages, call history, voicemail transcripts, and accessible recordings from TextFree Web in a local ZIP archive. Read conversations offline, play saved audio, and keep the structured data for your own records.
 
-**Experimental:** version **0.2.2** supports both observed TextFree voicemail storage hosts. The updated downloader has saved and validated two real WAV recordings. Try a conversation with voicemail and check its offline audio before running the full inbox.
+The extension runs locally. It does not require an account password, API token, remote service, or production dependencies, and has no analytics. It is not affiliated with TextFree or Pinger.
 
-## Install and use
+## Install and export
 
-1. On GitHub, choose **Code → Download ZIP**, then unzip the download. You can also use a separately packaged `textfree-exporter.zip`.
-2. Open `chrome://extensions` in Chrome and enable **Developer mode**.
-3. Click **Load unpacked** and choose the extracted folder containing `manifest.json` (usually `textfree-exporter-main`).
-4. Return to your signed-in `https://messages.textfree.us` tab. Open a conversation.
-5. Open Chrome’s Extensions menu (the puzzle-piece icon), then **TextFree Local Exporter**.
-6. Start with **Export current conversation**. If you leave **Download attachments and voicemail audio** enabled, Chrome asks for access to the three supported TextFree media storage hosts. Declining still allows text exports.
-7. Keep the TextFree tab open and avoid changing conversations while it runs. Use the on-page **Download ZIP** button when capture finishes.
-8. Unzip the resulting archive and open **index.html**. Check **report.json**, then use **Export entire inbox** for the full available web history.
+1. Choose **Code → Download ZIP** on GitHub, then extract the download. You can also use the packaged `textfree-exporter.zip`.
+2. Open `chrome://extensions`, enable **Developer mode**, and click **Load unpacked**. Select the folder containing `manifest.json`.
+3. Return to your signed-in `https://messages.textfree.us` tab and open a conversation.
+4. Open **TextFree Local Exporter** from Chrome’s Extensions menu. Start with **Export current conversation**.
+5. Leave **Include media** checked to save attachments and voicemail audio. Allow access to the supported TextFree media hosts when prompted. Declining still allows a text export.
+6. Keep TextFree open and avoid changing conversations during capture. Click **Download ZIP** when it finishes.
+7. Extract the ZIP and open **index.html**. Use the conversation index to navigate and your browser’s Find command to search. Audio players and download links use the saved local files.
 
-The extension opens conversations and scrolls the inbox and each chat to load older history. This may mark conversations as read. To capture voicemail audio, it clicks the voicemail Play controls while briefly intercepting their recording links; this **may mark voicemails as listened to**. It saves the files without playing audio or opening a tab for each recording. It never types into the message composer, sends messages, deletes conversations, changes account settings, or follows links inside messages. **Stop and keep progress** preserves the current capture; click **Download ZIP** afterward. Refreshing or closing TextFree discards any capture you have not downloaded. The extension can be removed from Chrome after use.
+Use **Export entire inbox** to capture all conversations available through the web interface. The exporter scrolls the inbox and each conversation to load older history. **Stop and keep progress** retains the current capture so you can download a partial archive.
 
-### Version 0.2.2
+Opening conversations may mark them as read. Capturing voicemail audio uses the site’s Play controls and may mark recordings as listened to. The exporter does not send messages, delete conversations, or change account settings.
 
-Adds the second voicemail host observed in TextFree Web, `pingerprod01usw2-pb-vmmessages.s3.amazonaws.com`, alongside the older `pinger-prod-vmmessages.s3.amazonaws.com` host. Version 0.2.1 could capture a link on the second host but rejected it as unsupported. The popup now requests its optional download permission, and the downloader applies the same path, format, and size checks to both voicemail hosts. Unsupported-host errors now name the host without exposing the private recording path.
+### Updating
 
-### Version 0.2.1
+Save any finished capture before refreshing TextFree. Replace the extension files, click **Reload** on `chrome://extensions`, then refresh the TextFree tab. New media hosts may require an additional optional permission. The new reader layout applies to new exports; existing ZIP files keep their original HTML.
 
-Fixes a voicemail capture check that compared each conversation URL with Chrome's content-script sender URL. Chrome can retain the original sender URL while TextFree moves between conversations without a reload, causing `Invalid voicemail request` before any audio link is captured. The exporter now validates the sender's origin and checks the actual page URL and voicemail record inside the page immediately before clicking. Failed capture details are returned explicitly and the completion panel lists the most common voicemail failure reasons.
+## The archive
 
-### Updating an existing installation
+- **index.html** — a responsive reader with a conversation sidebar, date dividers, call entries, voicemail playback, and transcripts. It works offline without JavaScript or external fonts and supports printing to PDF.
+- **archive.json** — structured conversations and records, including displayed dates, times, directions, durations, transcripts, reactions, and media status.
+- **report.json** — capture scope, history-loading results, missing files, and export notes.
+- **attachments/** — downloaded images, documents, and recordings, including voicemail WAV files.
 
-Download any finished capture before refreshing TextFree. Replace the extension files with the latest download, click **Reload** for TextFree Local Exporter on `chrome://extensions`, then refresh the TextFree tab. Start a new export with media downloading enabled and allow the new voicemail host permission. Existing ZIP archives do not gain recordings automatically.
-
-## Files in an exported archive
-
-- `index.html`: readable offline conversation archive, searchable with Chrome’s Find command and printable to PDF.
-- `archive.json`: structured conversations and records, including displayed dates/times, directions, transcripts, reactions, links, and attachment status.
-- `report.json`: pagination results, failures, missing media, and conversations requiring review.
-- `attachments/`: successfully downloaded media files, including voicemail `.wav` recordings. The offline HTML includes playback and download controls for each saved recording.
+The reader keeps routine export details in a collapsible section. Missing files and incomplete history produce specific notes in the relevant conversation. A successful capture does not show a generic warning banner.
 
 ## Coverage and limits
 
-**This is not a guaranteed “everything in my account” backup. Do not delete the account until you have checked the archive and saved any missing items separately.**
+An export includes history available through TextFree Web at capture time. It cannot recover deleted, expired, app-only, or otherwise unavailable content.
 
-- Captures only data made available by TextFree Web. Deleted, expired, app-only, and otherwise unavailable content cannot be recovered.
-- Voicemail transcripts, displayed durations, and accessible WAV recordings are captured. The website opens recordings through its Play button rather than exposing an audio element in the chat. The exporter captures that link only during the synchronous click and restores normal browser behavior immediately. A conversation and record check prevents capturing from a different chat. If the site changes its player, a link is missing, or a file is inaccessible, the recording remains explicitly listed as missing and the transcript is kept.
-- Downloads are restricted to the observed TextFree locations: `https://pingerprod01usw2-pb-mmspics.s3.amazonaws.com/communications/` for attachments, plus `https://pinger-prod-vmmessages.s3.amazonaws.com/vmmessages/` and `https://pingerprod01usw2-pb-vmmessages.s3.amazonaws.com/vmmessages/` for voicemail. Voicemail downloads are checked for a WAV file signature. Other locations, inaccessible files, and unsupported formats are recorded as missing. Regular hyperlinks in messages are never fetched.
-- The report separately counts voicemail recordings saved and missing. The total media-file count includes voicemail audio; “discovered files not saved” counts failed or skipped URLs, while the missing-voicemail count also includes recordings for which no URL was found.
-- Media is limited to 20 MB per file and 200 MB per archive to keep Chrome responsive. Text and missing-file references are retained when a limit is reached. You can export conversations individually to reduce archive size.
-- Dates and times are the site’s displayed values. No timezone or exact server timestamp is invented. Sender direction is `unknown` when the DOM does not provide enough evidence.
-- Repeated identical messages are preserved. Previously visited, hidden chat pages are excluded.
-- The tool loads the inbox in batches and older messages until the site disables its pagination control. `exhausted` means the website stopped offering older items, not that the server’s complete account data was independently verified. Missing controls, stalls, navigation failures, cancellations, and unknown message types are reported.
-- Large text histories remain in browser memory until downloaded. No resumable checkpoint is written to browser storage. Stop and download partial progress if needed.
+- **History:** the exporter loads older items until TextFree disables its pagination control. An `exhausted` result means the website stopped offering more pages; it does not independently verify all data held by the service. Missing controls, stalled loading, navigation failures, and cancellations are recorded in the report.
+- **Voicemail:** transcripts, displayed durations, and accessible WAV recordings are saved. TextFree opens the recording through its Play button. The exporter briefly captures that link, restores normal behavior, and downloads the file without opening a tab for each recording. If capture or download fails, the transcript is retained with a specific note.
+- **Media:** files are limited to 20 MB each and 200 MB per archive. When a limit is reached, text and missing-file references are retained. Export individual conversations to reduce the archive size.
+- **Dates and times:** values shown by TextFree are preserved. No message timezone or precise server timestamp is inferred. The export timestamp is shown separately in UTC.
+- **Duplicates:** repeated identical messages are preserved. Previously visited, hidden conversation pages are excluded.
+- **Progress:** capture remains in memory until downloaded. Refreshing or closing TextFree discards any unsaved capture. There is no resumable checkpoint.
 
-## Validation
+Downloads are limited to the observed TextFree locations:
 
-Live page inspection verified active vs. hidden chat selectors, message and call markup, displayed timestamps, voicemail transcripts, image URLs, the Ionic shadow-DOM scroll area, inbox pagination, and a voicemail recording opened by the site's Play control. A user-provided recording URL on the older host returned HTTP 200 with WAV content. For 0.2.2, the actual downloader code fetched two live recordings from the second host; both files passed WAV signature and full PCM payload checks. This exercised the downloader outside Chrome; extension permission prompts and a complete live export still need user verification. This repository contains only source code and synthetic test fixtures; no personal conversations, recording URLs, or account exports are included.
+- `https://pingerprod01usw2-pb-mmspics.s3.amazonaws.com/communications/`
+- `https://pinger-prod-vmmessages.s3.amazonaws.com/vmmessages/`
+- `https://pingerprod01usw2-pb-vmmessages.s3.amazonaws.com/vmmessages/`
 
-Automated tests cover parsing, duplicate preservation, hidden-page isolation, unknown records, missing audio, ZIP integrity, HTML escaping, inbox/history pagination, stalled history, cancellation, navigation failure, restricted media fetching, voicemail link capture and restoration, record mismatch guards, voicemail download success and failure, and stale sender URLs after conversation navigation. Tests use synthetic data. The complete 0.2.2 flow has **not yet been verified through the installed extension on a live inbox**. Begin with a single-conversation export and verify offline playback.
+Downloads use HTTPS GET requests without credentials or redirects. WAV recordings are checked for their file signature. Unsupported locations and formats are reported; regular hyperlinks in messages are never fetched.
 
-For development only, with Node.js 22+ and Python 3 available:
+## Recent changes
+
+- **0.3.0:** redesigned offline reader, compact call entries, clearer audio controls, responsive conversation navigation, and neutral export copy.
+- **0.2.2:** support for the second observed voicemail storage host.
+- **0.2.1:** corrected voicemail capture after conversation navigation and surfaced precise failure reasons.
+
+## Development and validation
+
+With Node.js 22+ and Python 3:
 
 ```sh
 npm ci
 npm test
 ```
 
-No build step is required to load the extension. Test dependencies are not used by the extension.
+No build step is required. Test dependencies are not used by the extension.
 
-## Implementation
+Tests cover DOM extraction, duplicate preservation, hidden-page isolation, navigation and pagination failures, cancellation, voicemail link capture, both supported voicemail hosts, media validation, archive rendering, HTML escaping, and ZIP integrity. The reader is also checked in Chrome using synthetic conversations at desktop and mobile widths.
 
-- `core.js`: pure DOM extraction, safe HTML rendering, coverage report, and dependency-free ZIP writer.
-- `collector.js`: on-demand, isolated content script; navigates conversation labels and Ionic scroll areas, with stop and download controls.
-- `background.js`: validates attachment source and performs bounded GET requests without credentials or redirects.
-- `voicemail.js`: short-lived MAIN-world Play-button link capture, invoked by the background worker for the active conversation only. Does not read private application state, credentials, or tokens.
-- `popup.*`: user-invoked entry point and optional media permission.
+A live single-conversation export has saved both voicemail recordings with zero missing files. That confirms the tested flow, not the completeness of every account export. This repository contains source code and synthetic fixtures only; no personal conversations, recording URLs, or account exports are included.
 
-Chrome permissions are limited to `activeTab`, `scripting`, and optional access to the three observed media hosts. The extension is not affiliated with TextFree or Pinger. Source documentation: [Chrome scripting](https://developer.chrome.com/docs/extensions/reference/api/scripting), [extension cross-origin requests](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests), and [optional permissions](https://developer.chrome.com/docs/extensions/reference/api/permissions).
+- `archive-view.js`: offline HTML reader and embedded styles.
+- `core.js`: DOM extraction, coverage report, HTML escaping, and ZIP writer.
+- `collector.js`: conversation navigation, history loading, capture progress, and ZIP download.
+- `background.js`: media validation and bounded downloads.
+- `voicemail.js`: brief Play-button link capture in the page’s main JavaScript context.
+- `popup.*`: export options and optional media permissions.
+
+Chrome permissions are limited to `activeTab`, `scripting`, and optional access to the three media hosts above. See the Chrome documentation for [scripting](https://developer.chrome.com/docs/extensions/reference/api/scripting), [cross-origin requests](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests), and [optional permissions](https://developer.chrome.com/docs/extensions/reference/api/permissions).

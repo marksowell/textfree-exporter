@@ -15,7 +15,7 @@
     const host=document.createElement('div');state.host=host;
     host.style.cssText='position:fixed;right:18px;bottom:18px;z-index:2147483647;max-width:360px;width:calc(100vw - 36px)';
     const shadow=host.attachShadow({mode:'closed'});
-    shadow.innerHTML='<style>:host{all:initial}section{font:14px/1.45 system-ui;color:#173b2f;background:#f6faf7;border:1px solid #91ad9f;border-radius:10px;padding:18px;box-shadow:0 8px 32px #0003}h2{font-size:17px;margin:0 0 10px}p{white-space:pre-wrap;overflow-wrap:anywhere}button{font:600 12px system-ui;border-radius:5px;border:1px solid #41755c;padding:9px;margin:4px 5px 0 0;background:white;color:#174a32;cursor:pointer}button:disabled{opacity:.5}small{display:block;margin-top:10px;color:#5c685f}</style><section><h2>TextFree local export</h2><p role="status"></p><button id="stop">Stop and keep progress</button><button id="save">Download ZIP</button><button id="close">Close</button><small>Keep this tab open. Review the coverage report before deleting your account.</small></section>';
+    shadow.innerHTML='<style>:host{all:initial}section{font:14px/1.45 system-ui;color:#173b2f;background:#f8faf6;border:1px solid #c5d2c6;max-height:calc(100vh - 36px);overflow:auto;border-radius:10px;padding:18px;box-shadow:0 8px 32px #0003}h2{font-size:17px;margin:0 0 10px}p{white-space:pre-wrap;overflow-wrap:anywhere}button{font:600 12px system-ui;border-radius:5px;border:1px solid #41755c;padding:9px;margin:4px 5px 0 0;background:white;color:#174a32;cursor:pointer}button:disabled{opacity:.5}small{display:block;margin-top:10px;color:#5c685f}</style><section><h2>TextFree local export</h2><p role="status"></p><button id="stop">Stop and keep progress</button><button id="save">Download ZIP</button><button id="close">Close</button><small>Keep this tab open until capture finishes. Download the ZIP to save your archive.</small></section>';
     document.documentElement.append(host);
     state.status=shadow.querySelector('p');state.save=shadow.querySelector('#save');state.save.disabled=true;
     shadow.querySelector('#stop').onclick=()=>{state.stop=true;status('Stopping… the current capture will be retained.');};
@@ -160,7 +160,13 @@
       state.archive.finishedAt=new Date().toISOString();state.running=false;state.save.disabled=false;
       const result=C.report(state.archive);
       const failures=result.voicemailFailureReasons.slice(0,3).map(f=>`${f.count} recording(s): ${f.reason}`).join('\n');
-      status(`${state.stop?'Stopped.':'Capture finished.'} ${result.conversationCount} conversations, ${result.recordCount} records.\n${result.savedVoicemailAudio} of ${result.voicemailCount} voicemail recordings saved; ${result.missingVoicemailAudio} missing.${failures?'\n'+failures:''}\n${result.downloadedAttachments} media files saved in total; ${result.unsavedAttachments} discovered files not saved.\n${result.conversationsNeedingReview.length} conversations need review.\nClick Download ZIP to save the archive.${result.errors.length?'\n'+result.errors.join('\n'):''}`);
+      const lines=[`${state.stop?'Capture stopped.':'Capture finished.'} ${result.conversationCount} ${result.conversationCount===1?'conversation':'conversations'}, ${result.recordCount} ${result.recordCount===1?'item':'items'}.`];
+      if(result.voicemailCount)lines.push(`${result.savedVoicemailAudio} of ${result.voicemailCount} voicemail recordings saved; ${result.missingVoicemailAudio} missing.`);
+      if(failures)lines.push(failures);
+      if(result.downloadedAttachments||result.unsavedAttachments)lines.push(`${result.downloadedAttachments} media files saved${result.unsavedAttachments?`; ${result.unsavedAttachments} discovered files not saved`:''}.`);
+      if(result.conversationsNeedingReview.length)lines.push(`${result.conversationsNeedingReview.length} ${result.conversationsNeedingReview.length===1?'conversation has':'conversations have'} export notes.`);
+      lines.push('Click Download ZIP to save the archive.',...result.errors);
+      status(lines.join('\n'));
       // Restore only the original selected row, never use browser history or forms.
       if(original?.isConnected&&!original.classList.contains('conversation-selected'))original.querySelector('.contact')?.click();
     }

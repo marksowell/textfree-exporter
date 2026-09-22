@@ -1,11 +1,10 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><title>TextFree export</title>
+<html lang="en"><meta charset="utf-8"><title>TextFree Local Exporter</title>
 <link rel="stylesheet" href="popup.css">
-<body><h1>Save your TextFree history</h1>
-<p>Export the current conversation first, or collect the entire inbox. Keep TextFree open while it runs.</p>
-<label><input id="media" type="checkbox" checked> Download attachments and voicemail audio</label>
-<p class="note">Voicemails include transcripts, durations, and accessible recordings. Capturing audio uses each Play button and may mark voicemails as listened to. Opening conversations may mark them as read.</p>
+<body><header><p class="eyebrow">TextFree Local Exporter <span id="version"></span></p><h1>Save your conversations.</h1><p>Keep a readable copy of your messages, calls, and voicemail recordings.</p></header>
+<label class="media-option"><input id="media" type="checkbox" checked><span>Include media<span class="option-note">Attachments and voicemail audio</span></span></label>
 <button id="current">Export current conversation</button>
 <button id="all">Export entire inbox</button>
+<p class="note">Keep TextFree open while capture runs. Opening conversations can mark them as read; capturing voicemail can mark it as listened to.</p>
 <p id="status" role="status"></p>
 <script src="popup.js"></script></body></html>

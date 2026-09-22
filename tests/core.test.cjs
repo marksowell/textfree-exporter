@@ -68,7 +68,7 @@ test('collector stores voicemail audio with its transcript and duration and rend
   const a=await finished(ctx),r=a.conversations[1].records[0],report=C.report(a);
   assert.equal(calls[0].type,'TF_EXPORT_VOICEMAIL');assert.equal(calls[0].pageUrl,'https://messages.textfree.us/conversation/2');assert.equal(calls[0].ordinal,0);assert.equal(calls[0].expected.transcript,'Please call back.');
   assert.equal(r.transcript,'Please call back.');assert.equal(r.duration,'0:35');assert.equal(r.warnings.length,0);assert.equal(r.attachments[0].status,'saved');assert.equal(r.attachments[0].path,'attachments/000001.wav');assert.equal(report.savedVoicemailAudio,1);assert.equal(report.missingVoicemailAudio,0);assert.equal(report.conversationsNeedingReview.length,0);assert.deepEqual(Array.from(ctx.TFRunner.files[0].data),[1,2,3]);
-  assert.match(C.render(a),/<audio controls preload="none" src="attachments\/000001.wav"><\/audio>/);assert.match(C.render(a),/1 of 1 voicemail recordings saved/);
+  assert.match(C.render(a),/<audio controls preload="metadata" src="attachments\/000001.wav"><\/audio>/);assert.match(C.render(a),/<dt>Voicemail audio<\/dt><dd>1 of 1 saved<\/dd>/);
 });
 test('voicemail link or download failure retains text and counts a missing recording',async()=>{
   for(const stage of ['link','download']){

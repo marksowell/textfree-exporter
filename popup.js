@@ -12,7 +12,7 @@ async function start(scope) {
     if (media) media = await chrome.permissions.request({origins:mediaOrigins});
     const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
     if (!tab?.url?.startsWith('https://messages.textfree.us/')) throw new Error('Open your signed-in TextFree tab, then click this extension.');
-    await chrome.scripting.executeScript({target:{tabId:tab.id},files:['core.js','collector.js']});
+    await chrome.scripting.executeScript({target:{tabId:tab.id},files:['archive-view.js','core.js','collector.js']});
     const result = await chrome.tabs.sendMessage(tab.id,{type:'TF_EXPORT_START',scope,media});
     if (!result?.ok) throw new Error(result?.error || 'Could not start the exporter.');
     window.close();
@@ -23,3 +23,5 @@ async function start(scope) {
 }
 document.querySelector('#current').addEventListener('click',()=>start('current'));
 document.querySelector('#all').addEventListener('click',()=>start('all'));
+
+document.querySelector('#version').textContent='v'+chrome.runtime.getManifest().version;
