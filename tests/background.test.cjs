@@ -6,7 +6,7 @@ function downloader(options={}){
   let listener,requests=[],permissions=[],injections=[];
   const ctx=vm.createContext({URL,AbortController,Uint8Array,btoa,setTimeout,clearTimeout,
     importScripts(file){vm.runInContext(fs.readFileSync(require.resolve('../'+file),'utf8'),ctx);},
-    chrome:{permissions:{contains:async request=>{permissions.push(request);return options.allowed!==false;}},
+    chrome:{permissions:{contains:async request=>{permissions.push(request);return typeof options.allowed==='function'?options.allowed(request):options.allowed!==false;}},
       scripting:{executeScript:async config=>{injections.push(config);if(options.scriptError)throw new Error(options.scriptError);return options.execute?options.execute(config):[{frameId:0,result:options.captureResult||{ok:true,url:options.link}}];}},
       runtime:{onMessage:{addListener(f){listener=f;}}}},
     fetch:async(url,config)=>{requests.push({url,config});return new Response(options.bytes||new Uint8Array([1,2,3]),{headers:{'content-type':options.type||'image/jpeg'}});}});
@@ -73,4 +73,25 @@ test('real serialized capture works after SPA navigation but refuses a wrong cur
   assert.equal(success.ok,true);assert.equal(success.url,voiceUrl);assert.equal(clicks,1);assert.equal(window.open,originalOpen);
   const failure=await d.send(voiceRequest);
   assert.equal(failure.ok,false);assert.match(failure.error,/Conversation changed/);assert.equal(clicks,1);
+});
+
+const regionalVoiceUrl='https://pingerprod01usw2-pb-vmmessages.s3.amazonaws.com/vmmessages/123/2026/synthetic.wav';
+test('regional voicemail host is supported for both Play-link capture and validated WAV downloads',async()=>{
+  const origin='https://pingerprod01usw2-pb-vmmessages.s3.amazonaws.com/*';
+  const d=downloader({link:regionalVoiceUrl,type:'application/octet-stream',bytes:wav,allowed:request=>request.origins[0]===origin});
+  const link=await d.send(voiceRequest);assert.equal(link.ok,true);assert.equal(link.url,regionalVoiceUrl);
+  const recording=await d.run(link.url);assert.equal(recording.ok,true);assert.equal(recording.type,'audio/wav');assert.deepEqual(Buffer.from(recording.base64,'base64'),wav);assert.equal(d.requests[0].url,regionalVoiceUrl);
+  assert.equal(d.requests[0].config.credentials,'omit');assert.equal(d.requests[0].config.redirect,'error');
+  assert.ok(require('../manifest.json').optional_host_permissions.includes(origin));
+});
+test('regional voicemail downloads still enforce host, path, permission, and WAV checks',async()=>{
+  const rejected=downloader({bytes:wav,type:'audio/wav'});
+  for(const url of [regionalVoiceUrl.replace('/vmmessages/','/other/'),regionalVoiceUrl.replace('.s3.amazonaws.com','.s3.amazonaws.com.evil.example')])assert.equal((await rejected.run(url)).ok,false);
+  assert.equal(rejected.requests.length,0);
+  assert.equal((await downloader({allowed:false}).run(regionalVoiceUrl)).ok,false);
+  assert.equal((await downloader({type:'audio/wav',bytes:new Uint8Array([1,2,3])}).run(regionalVoiceUrl)).ok,false);
+});
+test('unsupported voicemail errors identify the host without including the private recording path',async()=>{
+  const result=await downloader({link:'https://unrecognized.example/vmmessages/private-account/private-recording.wav'}).send(voiceRequest);
+  assert.equal(result.ok,false);assert.equal(result.error,'Unsupported voicemail host: unrecognized.example');
 });

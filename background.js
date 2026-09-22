@@ -1,13 +1,18 @@
 importScripts('voicemail.js');
+const VOICEMAIL_HOSTS = new Set([
+  'pinger-prod-vmmessages.s3.amazonaws.com',
+  'pingerprod01usw2-pb-vmmessages.s3.amazonaws.com'
+]);
 const MEDIA_PATHS = new Map([
   ['pingerprod01usw2-pb-mmspics.s3.amazonaws.com', '/communications/'],
-  ['pinger-prod-vmmessages.s3.amazonaws.com', '/vmmessages/']
+  ...[...VOICEMAIL_HOSTS].map(host => [host, '/vmmessages/'])
 ]);
 function mediaUrl(raw, voicemailOnly = false) {
   const url = new URL(raw);
   const prefix = MEDIA_PATHS.get(url.hostname);
-  if(url.protocol !== 'https:' || url.port || !prefix || !url.pathname.startsWith(prefix) || url.username || url.password ||
-     (voicemailOnly && url.hostname !== 'pinger-prod-vmmessages.s3.amazonaws.com')) throw new Error('Attachment host or path is not supported');
+  if(url.protocol !== 'https:' || url.port || url.username || url.password) throw new Error('Media URL must use HTTPS without credentials or a custom port');
+  if(!prefix || (voicemailOnly && !VOICEMAIL_HOSTS.has(url.hostname))) throw new Error(`Unsupported ${voicemailOnly?'voicemail':'attachment'} host: ${url.hostname}`);
+  if(!url.pathname.startsWith(prefix)) throw new Error(`Unsupported media path on ${url.hostname}; expected ${prefix}`);
   return url;
 }
 chrome.runtime.onMessage.addListener((message,sender,reply)=>{
@@ -23,7 +28,8 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
          requestedPage.username || requestedPage.password ||
          !Number.isSafeInteger(message.ordinal) || message.ordinal < 0 ||
          !['duration','time','transcript'].every(key => typeof message.expected?.[key] === 'string')) throw new Error('Invalid voicemail request');
-      if(!await chrome.permissions.contains({origins:['https://pinger-prod-vmmessages.s3.amazonaws.com/*']})) throw new Error('Voicemail download permission was not granted');
+      const permittedHosts = await Promise.all([...VOICEMAIL_HOSTS].map(host => chrome.permissions.contains({origins:[`https://${host}/*`]})));
+      if(!permittedHosts.some(Boolean)) throw new Error('Voicemail download permission was not granted');
       const results = await chrome.scripting.executeScript({
         target:{tabId:sender.tab.id,frameIds:[0]},world:'MAIN',func:captureVoicemailLink,
         args:[{pageUrl:message.pageUrl,ordinal:message.ordinal,expected:message.expected}]
@@ -47,7 +53,7 @@ chrome.runtime.onMessage.addListener((message,sender,reply)=>{
       const reader=response.body.getReader(),chunks=[];let total=0;
       for(;;){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>max){await reader.cancel();throw new Error('Attachment exceeds 20 MB per-file limit');}chunks.push(value);}
       const bytes=new Uint8Array(total);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length;}
-      if(url.hostname === 'pinger-prod-vmmessages.s3.amazonaws.com') {
+      if(VOICEMAIL_HOSTS.has(url.hostname)) {
         // S3 may serve WAV as audio/x-wav, audio/wave, or octet-stream.
         const tag = (start,end) => String.fromCharCode(...bytes.subarray(start,end));
         if(bytes.length < 12 || tag(0,4) !== 'RIFF' || tag(8,12) !== 'WAVE') throw new Error('Voicemail response is not a WAV recording');

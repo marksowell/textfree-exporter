@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "TextFree Local Exporter",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Save the conversations visible in TextFree Web to a local archive with a coverage report.",
   "permissions": ["activeTab", "scripting"],
   "optional_host_permissions": [
     "https://pingerprod01usw2-pb-mmspics.s3.amazonaws.com/*",
-    "https://pinger-prod-vmmessages.s3.amazonaws.com/*"
+    "https://pinger-prod-vmmessages.s3.amazonaws.com/*",
+    "https://pingerprod01usw2-pb-vmmessages.s3.amazonaws.com/*"
   ],
   "background": {"service_worker": "background.js"},
   "action": {"default_title": "Export TextFree", "default_popup": "popup.html"}

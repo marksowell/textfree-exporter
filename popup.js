@@ -1,6 +1,7 @@
 const mediaOrigins = [
   'https://pingerprod01usw2-pb-mmspics.s3.amazonaws.com/*',
-  'https://pinger-prod-vmmessages.s3.amazonaws.com/*'
+  'https://pinger-prod-vmmessages.s3.amazonaws.com/*',
+  'https://pingerprod01usw2-pb-vmmessages.s3.amazonaws.com/*'
 ];
 async function start(scope) {
   const status = document.querySelector('#status');
