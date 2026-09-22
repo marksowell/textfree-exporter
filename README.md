@@ -29,6 +29,8 @@ Save any finished capture before refreshing TextFree. Replace the extension file
 - **report.json** — capture scope, history-loading results, missing files, and export notes.
 - **attachments/** — downloaded images, documents, and recordings, including voicemail WAV files.
 
+The conversation sidebar shows the total number of entries so you can spot busy threads. Conversation headings break that count into messages, calls, and voicemails. A voicemail’s transcript and recording belong to one entry; a separate call-history event counts as another.
+
 The reader keeps routine export details in a collapsible section. Missing files and incomplete history produce specific notes in the relevant conversation. A successful capture does not show a generic warning banner.
 
 ## Coverage and limits
@@ -52,6 +54,7 @@ Downloads use HTTPS GET requests without credentials or redirects. WAV recording
 
 ## Recent changes
 
+- **0.3.1:** activity counts in the sidebar with clear message, call, and voicemail breakdowns.
 - **0.3.0:** redesigned offline reader, compact call entries, clearer audio controls, responsive conversation navigation, and neutral export copy.
 - **0.2.2:** support for the second observed voicemail storage host.
 - **0.2.1:** corrected voicemail capture after conversation navigation and surfaced precise failure reasons.
