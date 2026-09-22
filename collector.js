@@ -160,7 +160,7 @@
       state.archive.finishedAt=new Date().toISOString();state.running=false;state.save.disabled=false;
       const result=C.report(state.archive);
       const failures=result.voicemailFailureReasons.slice(0,3).map(f=>`${f.count} recording(s): ${f.reason}`).join('\n');
-      const lines=[`${state.stop?'Capture stopped.':'Capture finished.'} ${result.conversationCount} ${result.conversationCount===1?'conversation':'conversations'}, ${result.recordCount} ${result.recordCount===1?'entry':'entries'}.`];
+      const lines=[`${state.stop?'Capture stopped.':'Capture finished.'} ${result.conversationCount} ${result.conversationCount===1?'conversation':'conversations'}, ${result.activityCount} activity ${result.activityCount===1?'entry':'entries'}.`];
       if(result.voicemailCount)lines.push(`${result.savedVoicemailAudio} of ${result.voicemailCount} voicemail recordings saved; ${result.missingVoicemailAudio} missing.`);
       if(failures)lines.push(failures);
       if(result.downloadedAttachments||result.unsavedAttachments)lines.push(`${result.downloadedAttachments} media files saved${result.unsavedAttachments?`; ${result.unsavedAttachments} discovered files not saved`:''}.`);

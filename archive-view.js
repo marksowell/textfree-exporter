@@ -1,6 +1,6 @@
 (function(root){
   'use strict';
-  function render(archive, summary, e) {
+  function render(archive, summary, e, isMissedCall) {
     const conversations=archive.conversations||[];
     const plural=(n,one,many=one+'s')=>`${n} ${n===1?one:many}`;
     const icon=(name)=>{
@@ -16,10 +16,10 @@
     const name=c=>c.contact||c.id||'Conversation';
     const activity=records=>{
       const counts={message:0,call:0,voicemail:0,other:0};
-      for(const r of records)counts[['message','call','voicemail'].includes(r.kind)?r.kind:'other']++;
+      for(const r of records.filter(r=>!isMissedCall(r)))counts[['message','call','voicemail'].includes(r.kind)?r.kind:'other']++;
       return [[counts.message,'message','messages'],[counts.call,'call','calls'],[counts.voicemail,'voicemail','voicemails'],[counts.other,'other entry','other entries']].filter(([n])=>n);
     };
-    const activityText=records=>activity(records).map(([n,one,many])=>plural(n,one,many)).join(' · ')||'No activity';
+    const activityText=records=>activity(records).map(([n,one,many])=>plural(n,one,many)).join(' · ')||(records.length?'Missed calls only':'No activity');
     const dates=c=>{
       const values=c.records.map(r=>r.date).filter(Boolean);
       if(!values.length)return '';
@@ -60,7 +60,10 @@
       const extra=reviewed.has(c.id)?`<details class="thread-notes"><summary>Export notes</summary><p>${historyNote}</p>${c.history?.reason?`<p>${e(c.history.reason)}</p>`:''}${c.error?note(c.error):''}<p>See the <a href="report.json" download>export report</a> for details.</p></details>`:'';
       return `<section id="c${i}" class="conversation" aria-labelledby="title${i}" tabindex="-1"><header class="thread-heading"><div><p class="eyebrow">Conversation</p><h2 id="title${i}">${e(name(c))}</h2><p class="thread-meta">${activityText(c.records)}${dates(c)?`<span aria-hidden="true"> · </span>${e(dates(c))}`:''}</p></div><a class="back-link" href="#top" aria-label="Back to archive overview">↑</a></header>${extra}<div class="timeline">${records||'<p class="empty">No conversation history was captured.</p>'}</div></section>`;
     }).join('');
-    const nav=conversations.map((c,i)=>`<a class="conversation-link" href="#c${i}"><span class="contact-name">${e(name(c))}</span><span class="activity-count" title="${activityText(c.records)}" aria-label="${plural(c.records.length,'entry','entries')}: ${activityText(c.records)}">${c.records.length}</span><span class="contact-preview">${e(c.preview||dates(c)||'View conversation')}</span></a>`).join('');
+    const nav=conversations.map((c,i)=>{
+      const count=c.records.filter(r=>!isMissedCall(r)).length;
+      return `<a class="conversation-link" href="#c${i}" aria-label="${e(name(c))}: ${plural(count,'activity entry','activity entries')}; ${activityText(c.records)}"><span class="contact-name">${e(name(c))}</span><span class="activity-count" title="${activityText(c.records)}. Missed calls are excluded.">${count}</span><span class="contact-preview">${e(c.preview||dates(c)||'View conversation')}</span></a>`;
+    }).join('');
     const notes=summary.conversationsNeedingReview.length;
     const exportDetails=`<details class="export-details"><summary><span>Export details</span>${notes?`<span class="review-count">${plural(notes,'conversation')} with notes</span>`:''}<span class="disclosure" aria-hidden="true">+</span></summary><div class="detail-content"><p>Includes history available through TextFree Web at export time.</p><dl><div><dt>Scope</dt><dd>${archive.scope==='all'?'Entire inbox':'Selected conversation'}</dd></div><div><dt>Media files</dt><dd>${summary.downloadedAttachments} saved${summary.unsavedAttachments?` · ${summary.unsavedAttachments} not saved`:''}</dd></div>${summary.voicemailCount?`<div><dt>Voicemail audio</dt><dd>${summary.savedVoicemailAudio} of ${summary.voicemailCount} saved${summary.missingVoicemailAudio?` · ${summary.missingVoicemailAudio} missing`:''}</dd></div>`:''}</dl>${summary.errors.map(note).join('')}<a href="report.json" download>Download export report ${icon('arrow')}</a></div></details>`;
     const activeNavigation=conversations.length?conversations.map((_,i)=>`body:has(#c${i}:target) .conversation-link[href="#c${i}"]`).join(',')+'{background:#e3ebe2}':'';

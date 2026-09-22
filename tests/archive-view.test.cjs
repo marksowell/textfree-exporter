@@ -28,3 +28,24 @@ test('renderer loads in the extension isolated world and handles an empty archiv
   const {document}=parseHTML(context.TFCore.render(a));
   assert.match(document.querySelector('main .empty').textContent,/No conversations/);assert.equal(document.querySelector('script'),null);assert.match(document.querySelector('[http-equiv="Content-Security-Policy"]').getAttribute('content'),/script-src 'none'/);
 });
+
+test('activity counts exclude missed calls without losing history or counting transcripts separately',()=>{
+  const a=archive([
+    item('call',1,{errorType:'missedCallExtendedMessage',text:'Call notification'}),
+    item('call',2,{displayText:'Missed Call 9:01 AM'}),
+    item('voicemail',3,{transcript:'Sorry I missed your call.'}),
+    item('message',4,{text:'Missed Call'}),
+    item('call',5,{text:'Incoming Call · 2:13'})
+  ]);
+  const {document}=parseHTML(C.render(a)),report=C.report(a);
+  assert.equal(report.recordCount,5);assert.equal(report.activityCount,3);
+  assert.equal(document.querySelectorAll('.record').length,5);
+  assert.equal(document.querySelectorAll('.call-event').length,3);
+  assert.equal(document.querySelector('.activity-count').textContent,'3');
+  assert.match(document.querySelector('.thread-meta').textContent,/1 message · 1 call · 1 voicemail/);
+  const missedOnly=archive(a.conversations[0].records.slice(0,2));
+  const missedDocument=parseHTML(C.render(missedOnly)).document;
+  assert.equal(missedDocument.querySelector('.activity-count').textContent,'0');
+  assert.match(missedDocument.querySelector('.thread-meta').textContent,/Missed calls only/);
+  assert.equal(missedDocument.querySelectorAll('.call-event').length,2);
+});

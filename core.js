@@ -47,6 +47,9 @@
     return result;
   }
   function escape(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function isMissedCall(record){
+    return record.kind==='call'&&(/missed[\s_-]*call/i.test(record.errorType||'')||/\bmissed[\s-]+calls?\b/i.test(record.text||record.displayText||''));
+  }
   function report(archive){
     const conversations=archive.conversations||[],records=conversations.flatMap(c=>c.records||[]),attachments=records.flatMap(r=>r.attachments||[]);
     const failureCounts=new Map();
@@ -56,10 +59,10 @@
       for(const reason of new Set(reasons.length?reasons:['Voicemail recording URL was not found']))failureCounts.set(reason,(failureCounts.get(reason)||0)+1);
     }
     const voicemailFailureReasons=[...failureCounts].map(([reason,count])=>({reason,count})).sort((a,b)=>b.count-a.count);
-    return {scope:archive.scope,startedAt:archive.startedAt,finishedAt:archive.finishedAt||null,inbox:archive.inbox,conversationCount:conversations.length,recordCount:records.length,voicemailFailureReasons,voicemailCount:records.filter(r=>r.kind==='voicemail').length,savedVoicemailAudio:records.filter(r=>r.kind==='voicemail'&&r.attachments.some(a=>a.kind==='audio'&&a.status==='saved')).length,missingVoicemailAudio:records.filter(r=>r.kind==='voicemail'&&!r.attachments.some(a=>a.kind==='audio'&&a.status==='saved')).length,downloadedAttachments:attachments.filter(a=>a.status==='saved').length,unsavedAttachments:attachments.filter(a=>a.status!=='saved').length,conversationsNeedingReview:conversations.filter(c=>c.history?.status!=='exhausted'||c.error||c.records.some(r=>r.warnings.length||r.attachments.some(a=>a.status!=='saved')||(r.kind==='voicemail'&&!r.attachments.some(a=>a.kind==='audio'&&a.status==='saved')))).map(c=>({id:c.id,contact:c.contact,history:c.history,error:c.error||null,warnings:c.records.flatMap(r=>[...r.warnings.map(w=>`Record ${r.sequence}: ${w}`),...r.attachments.filter(a=>a.status!=='saved').map(a=>`Record ${r.sequence}: ${a.error||a.status}`)])})),errors:archive.errors||[],serverCompletenessVerified:false,limitations:['Captures only history exposed by TextFree Web. Deleted, expired, app-only, and otherwise unavailable data cannot be recovered.','Dates and times are the site’s displayed values; timezone and precise server timestamps are not inferred.','An exhausted history indicator means the site stopped offering older pages. It is not independent proof of a full account backup.','Voicemail recordings are saved when the Play button exposes a supported, accessible WAV file. Missing recordings and uncertain history are reported per conversation.']};
+    return {scope:archive.scope,startedAt:archive.startedAt,finishedAt:archive.finishedAt||null,inbox:archive.inbox,conversationCount:conversations.length,recordCount:records.length,activityCount:records.filter(r=>!isMissedCall(r)).length,voicemailFailureReasons,voicemailCount:records.filter(r=>r.kind==='voicemail').length,savedVoicemailAudio:records.filter(r=>r.kind==='voicemail'&&r.attachments.some(a=>a.kind==='audio'&&a.status==='saved')).length,missingVoicemailAudio:records.filter(r=>r.kind==='voicemail'&&!r.attachments.some(a=>a.kind==='audio'&&a.status==='saved')).length,downloadedAttachments:attachments.filter(a=>a.status==='saved').length,unsavedAttachments:attachments.filter(a=>a.status!=='saved').length,conversationsNeedingReview:conversations.filter(c=>c.history?.status!=='exhausted'||c.error||c.records.some(r=>r.warnings.length||r.attachments.some(a=>a.status!=='saved')||(r.kind==='voicemail'&&!r.attachments.some(a=>a.kind==='audio'&&a.status==='saved')))).map(c=>({id:c.id,contact:c.contact,history:c.history,error:c.error||null,warnings:c.records.flatMap(r=>[...r.warnings.map(w=>`Record ${r.sequence}: ${w}`),...r.attachments.filter(a=>a.status!=='saved').map(a=>`Record ${r.sequence}: ${a.error||a.status}`)])})),errors:archive.errors||[],serverCompletenessVerified:false,limitations:['Captures only history exposed by TextFree Web. Deleted, expired, app-only, and otherwise unavailable data cannot be recovered.','Dates and times are the site’s displayed values; timezone and precise server timestamps are not inferred.','An exhausted history indicator means the site stopped offering older pages. It is not independent proof of a full account backup.','Voicemail recordings are saved when the Play button exposes a supported, accessible WAV file. Missing recordings and uncertain history are reported per conversation.']};
   }
   const view=typeof module!=='undefined'?require('./archive-view.js'):root.TFArchiveView;
-  function render(archive){return view.render(archive,report(archive),escape);}
+  function render(archive){return view.render(archive,report(archive),escape,isMissedCall);}
   const encoder=new TextEncoder();
   const crcTable=Array.from({length:256},(_,n)=>{for(let k=0;k<8;k++)n=(n&1)?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
   function crc32(bytes){let c=0xffffffff;for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);return (c^0xffffffff)>>>0;}
@@ -78,6 +81,6 @@
     const [end,v]=header(22);v.setUint32(0,0x06054b50,true);v.setUint16(8,entries.length,true);v.setUint16(10,entries.length,true);v.setUint32(12,centralSize,true);v.setUint32(16,offset,true);
     return new Blob([...parts,...central,end],{type:'application/zip'});
   }
-  root.TFCore={extract,escape,report,render,zip,crc32,VOICEMAIL_WARNING};
+  root.TFCore={extract,escape,report,render,zip,crc32,isMissedCall,VOICEMAIL_WARNING};
   if(typeof module!=='undefined')module.exports=root.TFCore;
 })(globalThis);
